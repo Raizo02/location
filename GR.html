@@ -212,10 +212,10 @@
             // Mewujudkan peta dan menetapkan tahap zum
             map = L.map('map').setView([defaultLat, defaultLng], 7);
 
-            // Lapisan asas peta menggunakan OpenStreetMap
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
+            // Lapisan asas peta menggunakan Google Maps Satelit Hibrid (Satelit + Label)
+            L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                attribution: '© Google Maps',
+                maxZoom: 22
             }).addTo(map);
 
             // Mewujudkan penanda yang boleh diseret
