@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoConvert: Lat/Long ke RSO Borneo & GDM2000</title>
+    
+    <!-- Memuatkan Tailwind CSS untuk penggayaan -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Memuatkan Leaflet.js untuk paparan peta interaktif -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Memuatkan Proj4js untuk penukaran matematik koordinat -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    
+    <!-- Memuatkan ikon Phosphor untuk butang UI -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Animasi ringkas untuk butang klik */
+        .btn-press:active { transform: scale(0.97); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex flex-col">
+
+    <nav class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="ph-fill ph-globe-hemisphere-east text-3xl text-indigo-300"></i>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">GeoConvert RSO</h1>
+                    <p class="text-xs text-indigo-200 font-medium tracking-wide">Borneo (BT68) & GDM2000</p>
+                </div>
+            </div>
+            <a href="https://epsg.io" target="_blank" class="hidden sm:flex items-center gap-1 text-sm text-indigo-200 hover:text-white transition">
+                <i class="ph ph-info text-lg"></i> Rujukan EPSG
+            </a>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-6 lg:py-8 flex-grow">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+            
+            <!-- Lajur Kiri: Borang Input & Hasil Output -->
+            <div class="lg:col-span-5 flex flex-col gap-6">
+                
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 lg:p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <span class="bg-slate-100 text-slate-500 p-1.5 rounded-lg"><i class="ph ph-crosshair"></i></span>
+                            1. Input (WGS84)
+                        </h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Latitud (Y)</label>
+                            <input type="number" step="any" id="lat" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm" placeholder="Contoh: 6.0753">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Longitud (X)</label>
+                            <input type="number" step="any" id="lng" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm" placeholder="Contoh: 116.5593">
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex gap-3">
+                        <button onclick="convertCoordinates()" class="btn-press flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 px-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-sm">
+                            <i class="ph-bold ph-arrows-left-right text-lg"></i> Tukar
+                        </button>
+                        <button onclick="getCurrentLocation()" class="btn-press bg-white hover:bg-slate-50 text-slate-700 py-2.5 px-4 rounded-xl font-medium transition-colors flex items-center justify-center border border-slate-300 shadow-sm" title="Guna Lokasi GPS Semasa">
+                            <i class="ph-bold ph-navigation-arrow text-lg text-indigo-600"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 border-l-4 border-l-sky-500 p-5 lg:p-6">
+                    <h2 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">2. RSO Borneo (BT68)</h2>
+                    <p class="text-sm text-slate-500 mb-4">Timbalai 1948 (EPSG:29873) - Meter</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Easting (X)</label>
+                            <div class="flex">
+                                <input type="text" id="rso-easting" readonly class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-l-lg focus:outline-none text-slate-700 font-mono text-sm">
+                                <button onclick="copyText('rso-easting')" class="bg-sky-50 hover:bg-sky-100 px-3 border border-l-0 border-slate-300 rounded-r-lg text-sky-700 transition-colors" title="Salin Easting">
+                                    <i class="ph ph-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Northing (Y)</label>
+                            <div class="flex">
+                                <input type="text" id="rso-northing" readonly class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-l-lg focus:outline-none text-slate-700 font-mono text-sm">
+                                <button onclick="copyText('rso-northing')" class="bg-sky-50 hover:bg-sky-100 px-3 border border-l-0 border-slate-300 rounded-r-lg text-sky-700 transition-colors" title="Salin Northing">
+                                    <i class="ph ph-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Paparan Grid Reference RSO -->
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Format Grid Reference (GR)</label>
+                        <div class="flex items-center gap-3">
+                            <input type="text" id="rso-gr" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-sky-700 font-bold font-mono text-sm shadow-inner" placeholder="GR ------">
+                            <button onclick="copyText('rso-gr')" class="bg-white hover:bg-slate-50 px-3 py-2.5 border border-slate-300 rounded-lg text-slate-700 transition-colors flex-shrink-0 shadow-sm flex items-center gap-1" title="Salin Grid Reference">
+                                <i class="ph ph-copy"></i> Salin GR
+                            </button>
+                        </div>
+                        <p id="rso-gr-hint" class="text-xs text-slate-500 mt-2 italic"></p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 border-l-4 border-l-emerald-500 p-5 lg:p-6">
+                    <h2 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">3. GDM2000</h2>
+                    <p class="text-sm text-slate-500 mb-4">East Malaysia BRSO (EPSG:3376) - Meter</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Easting (X)</label>
+                            <div class="flex">
+                                <input type="text" id="gdm-easting" readonly class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-l-lg focus:outline-none text-slate-700 font-mono text-sm">
+                                <button onclick="copyText('gdm-easting')" class="bg-emerald-50 hover:bg-emerald-100 px-3 border border-l-0 border-slate-300 rounded-r-lg text-emerald-700 transition-colors" title="Salin Easting">
+                                    <i class="ph ph-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Northing (Y)</label>
+                            <div class="flex">
+                                <input type="text" id="gdm-northing" readonly class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-l-lg focus:outline-none text-slate-700 font-mono text-sm">
+                                <button onclick="copyText('gdm-northing')" class="bg-emerald-50 hover:bg-emerald-100 px-3 border border-l-0 border-slate-300 rounded-r-lg text-emerald-700 transition-colors" title="Salin Northing">
+                                    <i class="ph ph-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Paparan Grid Reference GDM2000 -->
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Format Grid Reference (GR)</label>
+                        <div class="flex items-center gap-3">
+                            <input type="text" id="gdm-gr" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-emerald-700 font-bold font-mono text-sm shadow-inner" placeholder="GR ------">
+                            <button onclick="copyText('gdm-gr')" class="bg-white hover:bg-slate-50 px-3 py-2.5 border border-slate-300 rounded-lg text-slate-700 transition-colors flex-shrink-0 shadow-sm flex items-center gap-1" title="Salin Grid Reference">
+                                <i class="ph ph-copy"></i> Salin GR
+                            </button>
+                        </div>
+                        <p id="gdm-gr-hint" class="text-xs text-slate-500 mt-2 italic"></p>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="lg:col-span-7 flex flex-col h-[500px] lg:h-auto min-h-[500px]">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col flex-grow relative z-10">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <i class="ph ph-map-trifold text-indigo-600 text-lg"></i> Peta Interaktif
+                        </h2>
+                        <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">Seret penanda untuk kemas kini</span>
+                    </div>
+                    <!-- Bekas peta Leaflet -->
+                    <div id="map" class="flex-grow rounded-xl border border-slate-200 bg-slate-100 z-0"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 hidden items-center px-4 py-3 space-x-3 text-white rounded-xl shadow-xl z-50 transition-opacity duration-300 opacity-0" role="alert">
+        <i id="toast-icon" class="ph-fill ph-info text-2xl"></i>
+        <div id="toast-message" class="text-sm font-medium">Mesej di sini.</div>
+    </div>
+
+    <script>
+        // Memastikan parameter Proj4 sentiasa tersedia sebagai sandaran 
+        const FALLBACK_29873 = "+proj=omerc +no_uoff +lat_0=4 +lonc=115 +alpha=53.31580995 +gamma=53.1301023611111 +k=0.99984 +x_0=0 +y_0=0 +ellps=evrstSS +towgs84=-679,669,-48,0,0,0,0 +units=m +no_defs +type=crs";
+        const FALLBACK_3376 = "+proj=omerc +no_uoff +lat_0=4 +lonc=115 +alpha=53.31580995 +gamma=53.1301023611111 +k=0.99984 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs";
+
+        // Mendaftar definisi sistem koordinat kepada proj4js
+        proj4.defs("EPSG:29873", FALLBACK_29873);
+        proj4.defs("EPSG:3376", FALLBACK_3376);
+
+        // Fungsi untuk mengambil definisi terkini dari EPSG.io sekiranya ada perubahan format
+        async function loadLatestEpsgDefs() {
+            try {
+                const res1 = await fetch('https://epsg.io/29873.proj4');
+                if(res1.ok) proj4.defs("EPSG:29873", await res1.text());
+                
+                const res2 = await fetch('https://epsg.io/3376.proj4');
+                if(res2.ok) proj4.defs("EPSG:3376", await res2.text());
+                
+                console.log("Definisi EPSG berjaya dimuat turun dan dikemas kini.");
+            } catch (error) {
+                console.warn("Gagal menghubungi EPSG.io, menggunakan definisi sandaran terbina dalam.");
+            }
+        }
+
+        // Variabel global untuk Peta
+        let map;
+        let marker;
+        // Lokasi asal (Gunung Kinabalu, Sabah)
+        let defaultLat = 6.0753;
+        let defaultLng = 116.5593;
+
+        function initMap() {
+            // Mewujudkan peta dan menetapkan tahap zum
+            map = L.map('map').setView([defaultLat, defaultLng], 7);
+
+            // Lapisan asas peta menggunakan OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Mewujudkan penanda yang boleh diseret
+            marker = L.marker([defaultLat, defaultLng], {
+                draggable: true
+            }).addTo(map);
+
+            // Kemas kini koordinat apabila penanda selesai diseret
+            marker.on('dragend', function() {
+                const position = marker.getLatLng();
+                updateInputsAndConvert(position.lat, position.lng);
+            });
+
+            // Kemas kini koordinat apabila pengguna klik di mana-mana di atas peta
+            map.on('click', function(e) {
+                marker.setLatLng(e.latlng);
+                updateInputsAndConvert(e.latlng.lat, e.latlng.lng);
+            });
+        }
+
+        function updateInputsAndConvert(lat, lng) {
+            document.getElementById('lat').value = lat.toFixed(6);
+            document.getElementById('lng').value = lng.toFixed(6);
+            convertCoordinates();
+        }
+
+        function extractGridReferenceParts(easting, northing) {
+            const getParts = (val) => {
+                // Ambil nilai integer tanpa pembundaran dan tukar ke string
+                const str = Math.floor(Math.abs(val)).toString();
+                // Ekstrak indeks 1, 2, 3 (yang mewakili digit ke-2, 3, dan 4)
+                if (str.length >= 4) {
+                    return str.substring(1, 4);
+                }
+                return "---";
+            };
+            
+            const eGR = getParts(easting);
+            const nGR = getParts(northing);
+            
+            return {
+                eGR: eGR,
+                nGR: nGR,
+                formatted: `GR ${eGR}${nGR}`
+            };
+        }
+
+        function convertCoordinates() {
+            const latInput = document.getElementById('lat').value;
+            const lngInput = document.getElementById('lng').value;
+            
+            const lat = parseFloat(latInput);
+            const lng = parseFloat(lngInput);
+
+            // Pengesahan ringkas ralat
+            if (isNaN(lat) || isNaN(lng)) {
+                showToast("Sila masukkan nilai Latitud dan Longitud yang sah.", "error");
+                resetOutputs();
+                return;
+            }
+
+            // Kemas kini kedudukan peta (jika ini dipanggil secara manual dari butang Tukar)
+            if (marker && map) {
+                const newLatLng = new L.LatLng(lat, lng);
+                marker.setLatLng(newLatLng);
+                map.setView(newLatLng, map.getZoom(), {animate: true});
+            }
+
+            try {
+                // 1. WGS84 kepada Timbalai 1948 RSO (EPSG:29873)
+                // Format parameter proj4: [longitude, latitude]
+                const pointRSO = proj4("EPSG:4326", "EPSG:29873", [lng, lat]);
+                document.getElementById('rso-easting').value = pointRSO[0].toFixed(3);
+                document.getElementById('rso-northing').value = pointRSO[1].toFixed(3);
+
+                const rsoGR = extractGridReferenceParts(pointRSO[0], pointRSO[1]);
+                document.getElementById('rso-gr').value = rsoGR.formatted;
+                document.getElementById('rso-gr-hint').innerText = `GR (${rsoGR.eGR}) untuk Easting, (${rsoGR.nGR}) untuk Northing`;
+
+                // 2. WGS84 kepada GDM2000 BRSO (EPSG:3376)
+                const pointGDM = proj4("EPSG:4326", "EPSG:3376", [lng, lat]);
+                document.getElementById('gdm-easting').value = pointGDM[0].toFixed(3);
+                document.getElementById('gdm-northing').value = pointGDM[1].toFixed(3);
+                
+                const gdmGR = extractGridReferenceParts(pointGDM[0], pointGDM[1]);
+                document.getElementById('gdm-gr').value = gdmGR.formatted;
+                document.getElementById('gdm-gr-hint').innerText = `GR (${gdmGR.eGR}) untuk Easting, (${gdmGR.nGR}) untuk Northing`;
+                
+            } catch (error) {
+                showToast("Ralat matematik ketika pengiraan unjuran.", "error");
+                console.error(error);
+                resetOutputs();
+            }
+        }
+
+        function resetOutputs() {
+            document.getElementById('rso-easting').value = "";
+            document.getElementById('rso-northing').value = "";
+            document.getElementById('rso-gr').value = "";
+            document.getElementById('rso-gr-hint').innerText = "";
+
+            document.getElementById('gdm-easting').value = "";
+            document.getElementById('gdm-northing').value = "";
+            document.getElementById('gdm-gr').value = "";
+            document.getElementById('gdm-gr-hint').innerText = "";
+        }
+
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                showToast("Sedang mendapatkan lokasi anda...", "info");
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        updateInputsAndConvert(position.coords.latitude, position.coords.longitude);
+                        showToast("Lokasi berjaya dikesan!", "success");
+                    },
+                    (error) => {
+                        let errMsg = "Ralat geolokasi.";
+                        if(error.code == 1) errMsg = "Akses lokasi dinafikan.";
+                        if(error.code == 2) errMsg = "Kedudukan tidak tersedia.";
+                        showToast(errMsg, "error");
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            } else {
+                showToast("Pelayar anda tidak menyokong fungsi geolokasi.", "error");
+            }
+        }
+
+        function copyText(elementId) {
+            const inputElement = document.getElementById(elementId);
+            if (!inputElement.value) {
+                showToast("Tiada data untuk disalin.", "error");
+                return;
+            }
+            
+            // Pemilihan teks untuk serasi peranti mudah alih & komputer
+            inputElement.select();
+            inputElement.setSelectionRange(0, 99999); 
+            
+            try {
+                // Menggunakan document.execCommand untuk mematuhi sekatan iFrame seperti yang ditetapkan
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                showToast("Disalin ke papan keratan!", "success");
+            } catch (err) {
+                showToast("Sistem gagal menyalin teks.", "error");
+            }
+        }
+
+        let toastTimeout;
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+            
+            clearTimeout(toastTimeout);
+            
+            // Konfigurasi warna mengikut jenis mesej
+            toast.className = "fixed bottom-6 left-1/2 transform -translate-x-1/2 flex items-center px-4 py-3 space-x-3 text-white rounded-xl shadow-xl z-[9999] transition-all duration-300 opacity-100 translate-y-0";
+            
+            if (type === 'error') {
+                toast.classList.add('bg-red-600');
+                toastIcon.className = "ph-fill ph-warning-circle text-2xl";
+            } else if (type === 'success') {
+                toast.classList.add('bg-emerald-600');
+                toastIcon.className = "ph-fill ph-check-circle text-2xl";
+            } else {
+                toast.classList.add('bg-slate-800');
+                toastIcon.className = "ph-fill ph-info text-2xl text-sky-400";
+            }
+            
+            toastMsg.textContent = message;
+            
+            // Sorok secara automatik
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => { toast.classList.add('hidden'); }, 300);
+            }, 3000);
+        }
+
+        window.onload = function() {
+            // Memuat turun takrifan terkini (segerak secara asynchronous)
+            loadLatestEpsgDefs();
+            
+            // Inisialisasi borang & Peta
+            document.getElementById('lat').value = defaultLat;
+            document.getElementById('lng').value = defaultLng;
+            
+            initMap();
+            
+            // Mula membuat penukaran awal
+            // Menggunakan timeout sedikit supaya UI sempat dilukis sepenuhnya
+            setTimeout(convertCoordinates, 200); 
+        };
+    </script>
+</body>
+</html>
